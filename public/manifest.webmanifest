@@ -1,0 +1,14 @@
+{
+  "name": "AIONIX NEXUS",
+  "short_name": "NEXUS",
+  "description": "Painel central de comando do ecossistema AIONIX.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07080b",
+  "theme_color": "#07080b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
