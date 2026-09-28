@@ -32,6 +32,5 @@ COPY --from=builder --chown=nexus:nexus /app/package.json ./package.json
 
 USER nexus
 EXPOSE 3000
-VOLUME ["/data"]
 
 CMD ["npm", "run", "start"]
