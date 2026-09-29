@@ -20,12 +20,12 @@ const sOrNull = (fd: FormData, k: string) => {
 };
 const flag = (fd: FormData, k: string) => ["1", "on", "true"].includes(String(fd.get(k) ?? ""));
 
-function uniqueSlug(table: string, base: string, ignoreId?: string): string {
+async function uniqueSlug(table: string, base: string, ignoreId?: string): Promise<string> {
   const root = slugify(base) || "item";
   let candidate = root;
   let n = 1;
   while (true) {
-    const row = get<{ id: string }>(`SELECT id FROM ${table} WHERE slug = ?`, [candidate]);
+    const row = await get<{ id: string }>(`SELECT id FROM ${table} WHERE slug = ?`, [candidate]);
     if (!row || row.id === ignoreId) return candidate;
     candidate = `${root}-${++n}`;
   }
@@ -39,17 +39,17 @@ export async function saveCategoryAction(_p: ActionState, fd: FormData): Promise
   const name = s(fd, "name");
   if (!name) return { error: "Informe o nome da categoria." };
 
-  const slug = uniqueSlug("categories", s(fd, "slug") || name, id || undefined);
+  const slug = await uniqueSlug("categories", s(fd, "slug") || name, id || undefined);
   const icon = s(fd, "icon") || "Layers";
   const color = asAccent(s(fd, "color"));
   const descricao = sOrNull(fd, "descricao");
 
   if (id) {
-    run("UPDATE categories SET name=?, slug=?, icon=?, color=?, descricao=? WHERE id=?", [
+    await run("UPDATE categories SET name=?, slug=?, icon=?, color=?, descricao=? WHERE id=?", [
       name, slug, icon, color, descricao, id,
     ]);
   } else {
-    run(
+    await run(
       "INSERT INTO categories (id, name, slug, icon, color, descricao, sort) VALUES (?,?,?,?,?,?, (SELECT COALESCE(MAX(sort),0)+1 FROM categories))",
       [uid(), name, slug, icon, color, descricao],
     );
@@ -60,7 +60,7 @@ export async function saveCategoryAction(_p: ActionState, fd: FormData): Promise
 
 export async function deleteCategoryAction(fd: FormData) {
   await requireUser();
-  run("DELETE FROM categories WHERE id = ?", [s(fd, "id")]);
+  await run("DELETE FROM categories WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
@@ -71,17 +71,17 @@ export async function moveCatalogAction(fd: FormData) {
   const id = s(fd, "id");
   const dir = s(fd, "dir") === "up" ? -1 : 1;
 
-  const row = get<{ sort: number }>(`SELECT sort FROM ${table} WHERE id = ?`, [id]);
+  const row = await get<{ sort: number }>(`SELECT sort FROM ${table} WHERE id = ?`, [id]);
   if (!row) return;
-  const neighbour = get<{ id: string; sort: number }>(
+  const neighbour = await get<{ id: string; sort: number }>(
     dir === -1
       ? `SELECT id, sort FROM ${table} WHERE sort < ? ORDER BY sort DESC LIMIT 1`
       : `SELECT id, sort FROM ${table} WHERE sort > ? ORDER BY sort ASC LIMIT 1`,
     [row.sort],
   );
   if (!neighbour) return;
-  run(`UPDATE ${table} SET sort = ? WHERE id = ?`, [neighbour.sort, id]);
-  run(`UPDATE ${table} SET sort = ? WHERE id = ?`, [row.sort, neighbour.id]);
+  await run(`UPDATE ${table} SET sort = ? WHERE id = ?`, [neighbour.sort, id]);
+  await run(`UPDATE ${table} SET sort = ? WHERE id = ?`, [row.sort, neighbour.id]);
   revalidatePath("/", "layout");
 }
 
@@ -93,7 +93,7 @@ export async function saveClientAction(_p: ActionState, fd: FormData): Promise<A
   const name = s(fd, "name");
   if (!name) return { error: "Informe o nome do cliente." };
 
-  const slug = uniqueSlug("clients", s(fd, "slug") || name, id || undefined);
+  const slug = await uniqueSlug("clients", s(fd, "slug") || name, id || undefined);
   const website = s(fd, "website") ? normalizeUrl(s(fd, "website")) : null;
 
   const values = [
@@ -111,12 +111,12 @@ export async function saveClientAction(_p: ActionState, fd: FormData): Promise<A
   ];
 
   if (id) {
-    run(
+    await run(
       `UPDATE clients SET name=?, slug=?, company=?, contact=?, email=?, phone=?, website=?, notes=?, color=?, icon=?, archived=?, updated_at=datetime('now') WHERE id=?`,
       [...values, id],
     );
   } else {
-    run(
+    await run(
       `INSERT INTO clients (id, name, slug, company, contact, email, phone, website, notes, color, icon, archived, sort)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?, (SELECT COALESCE(MAX(sort),0)+1 FROM clients))`,
       [uid(), ...values],
@@ -128,7 +128,7 @@ export async function saveClientAction(_p: ActionState, fd: FormData): Promise<A
 
 export async function deleteClientAction(fd: FormData) {
   await requireUser();
-  run("DELETE FROM clients WHERE id = ?", [s(fd, "id")]);
+  await run("DELETE FROM clients WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
@@ -139,13 +139,13 @@ export async function saveTagAction(_p: ActionState, fd: FormData): Promise<Acti
   const id = s(fd, "id");
   const name = s(fd, "name");
   if (!name) return { error: "Informe o nome da tag." };
-  const slug = uniqueSlug("tags", s(fd, "slug") || name, id || undefined);
+  const slug = await uniqueSlug("tags", s(fd, "slug") || name, id || undefined);
   const color = asAccent(s(fd, "color"));
 
   if (id) {
-    run("UPDATE tags SET name=?, slug=?, color=? WHERE id=?", [name, slug, color, id]);
+    await run("UPDATE tags SET name=?, slug=?, color=? WHERE id=?", [name, slug, color, id]);
   } else {
-    run("INSERT INTO tags (id, name, slug, color) VALUES (?,?,?,?)", [uid(), name, slug, color]);
+    await run("INSERT INTO tags (id, name, slug, color) VALUES (?,?,?,?)", [uid(), name, slug, color]);
   }
   revalidatePath("/", "layout");
   return { ok: "Tag salva." };
@@ -153,7 +153,7 @@ export async function saveTagAction(_p: ActionState, fd: FormData): Promise<Acti
 
 export async function deleteTagAction(fd: FormData) {
   await requireUser();
-  run("DELETE FROM tags WHERE id = ?", [s(fd, "id")]);
+  await run("DELETE FROM tags WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
@@ -183,9 +183,9 @@ export async function saveToolAction(_p: ActionState, fd: FormData): Promise<Act
   ];
 
   if (id) {
-    run("UPDATE tools SET group_id=?, name=?, url=?, subtitle=?, icon=?, color=?, favorite=? WHERE id=?", [...values, id]);
+    await run("UPDATE tools SET group_id=?, name=?, url=?, subtitle=?, icon=?, color=?, favorite=? WHERE id=?", [...values, id]);
   } else {
-    run(
+    await run(
       `INSERT INTO tools (id, group_id, name, url, subtitle, icon, color, favorite, sort)
        VALUES (?,?,?,?,?,?,?,?, (SELECT COALESCE(MAX(sort),0)+1 FROM tools))`,
       [uid(), ...values],
@@ -197,19 +197,19 @@ export async function saveToolAction(_p: ActionState, fd: FormData): Promise<Act
 
 export async function deleteToolAction(fd: FormData) {
   await requireUser();
-  run("DELETE FROM tools WHERE id = ?", [s(fd, "id")]);
+  await run("DELETE FROM tools WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
 export async function toggleToolFavoriteAction(fd: FormData) {
   await requireUser();
-  run("UPDATE tools SET favorite = 1 - favorite WHERE id = ?", [s(fd, "id")]);
+  await run("UPDATE tools SET favorite = 1 - favorite WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
 export async function registerToolOpenAction(fd: FormData) {
   await requireUser();
-  run("UPDATE tools SET opens = opens + 1 WHERE id = ?", [s(fd, "id")]);
+  await run("UPDATE tools SET opens = opens + 1 WHERE id = ?", [s(fd, "id")]);
 }
 
 export async function saveToolGroupAction(_p: ActionState, fd: FormData): Promise<ActionState> {
@@ -219,9 +219,9 @@ export async function saveToolGroupAction(_p: ActionState, fd: FormData): Promis
   if (!name) return { error: "Informe o nome do grupo." };
   const icon = s(fd, "icon") || "Grid2x2";
   if (id) {
-    run("UPDATE tool_groups SET name=?, icon=? WHERE id=?", [name, icon, id]);
+    await run("UPDATE tool_groups SET name=?, icon=? WHERE id=?", [name, icon, id]);
   } else {
-    run("INSERT INTO tool_groups (id, name, icon, sort) VALUES (?,?,?, (SELECT COALESCE(MAX(sort),0)+1 FROM tool_groups))", [
+    await run("INSERT INTO tool_groups (id, name, icon, sort) VALUES (?,?,?, (SELECT COALESCE(MAX(sort),0)+1 FROM tool_groups))", [
       uid(),
       name,
       icon,
@@ -233,7 +233,7 @@ export async function saveToolGroupAction(_p: ActionState, fd: FormData): Promis
 
 export async function deleteToolGroupAction(fd: FormData) {
   await requireUser();
-  run("DELETE FROM tool_groups WHERE id = ?", [s(fd, "id")]);
+  await run("DELETE FROM tool_groups WHERE id = ?", [s(fd, "id")]);
   revalidatePath("/", "layout");
 }
 
@@ -243,7 +243,7 @@ export async function saveSettingsAction(_p: ActionState, fd: FormData): Promise
   await requireUser();
   for (const key of ["owner_name", "org_name", "default_view", "density", "home_greeting"]) {
     const value = s(fd, key);
-    if (value) setSetting(key, value);
+    if (value) await setSetting(key, value);
   }
   revalidatePath("/", "layout");
   return { ok: "Preferências salvas." };
@@ -253,7 +253,7 @@ export async function saveSettingsAction(_p: ActionState, fd: FormData): Promise
 
 export async function clearActivityAction() {
   await requireUser();
-  run("DELETE FROM activity");
+  await run("DELETE FROM activity");
   revalidatePath("/", "layout");
 }
 
@@ -273,8 +273,8 @@ export async function resetDataAction(fd: FormData) {
     "clients",
     "tags",
   ]) {
-    run(`DELETE FROM ${t}`);
+    await run(`DELETE FROM ${t}`);
   }
-  logActivity({ action: "delete", entity: "system", title: "Todos os projetos foram apagados" });
+  await logActivity({ action: "delete", entity: "system", title: "Todos os projetos foram apagados" });
   revalidatePath("/", "layout");
 }

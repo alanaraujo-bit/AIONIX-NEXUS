@@ -8,7 +8,7 @@ import { KIND_ORDER, type SearchEntry } from "./search-types";
 export { KIND_LABEL, type SearchEntry, type SearchKind } from "./search-types";
 
 /** Índice completo, montado em uma leitura por request. */
-export function buildSearchIndex(): SearchEntry[] {
+export async function buildSearchIndex(): Promise<SearchEntry[]> {
   const out: SearchEntry[] = [];
 
   for (const nav of ALL_NAV) {
@@ -25,7 +25,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  const projects = all<{
+  const projects = await all<{
     id: string;
     name: string;
     slug: string;
@@ -48,8 +48,8 @@ export function buildSearchIndex(): SearchEntry[] {
     SELECT p.id, p.name, p.slug, p.codename, p.summary, p.icon, p.color, p.status, p.stage, p.priority,
            p.domain, p.is_pinned, p.is_favorite, p.is_archived,
            c.name AS cat, cl.name AS cli,
-           (SELECT group_concat(name, ' ') FROM project_tech WHERE project_id = p.id) AS tech,
-           (SELECT group_concat(t.name, ' ') FROM project_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.project_id = p.id) AS tags
+           (SELECT string_agg(name, ' ') FROM project_tech WHERE project_id = p.id) AS tech,
+           (SELECT string_agg(t.name, ' ') FROM project_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.project_id = p.id) AS tags
     FROM projects p
     LEFT JOIN categories c ON c.id = p.category_id
     LEFT JOIN clients cl ON cl.id = p.client_id
@@ -86,7 +86,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  const links = all<{
+  const links = await all<{
     id: string;
     label: string;
     url: string;
@@ -117,7 +117,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  for (const t of all<{
+  for (const t of await all<{
     id: string;
     name: string;
     url: string;
@@ -142,7 +142,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  for (const c of all<{ id: string; name: string; slug: string; company: string | null; icon: string; color: string; n: number }>(
+  for (const c of await all<{ id: string; name: string; slug: string; company: string | null; icon: string; color: string; n: number }>(
     `SELECT c.*, (SELECT COUNT(*) FROM projects p WHERE p.client_id = c.id) AS n FROM clients c ORDER BY c.name`,
   )) {
     out.push({
@@ -158,7 +158,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  for (const c of all<{ id: string; name: string; slug: string; icon: string; color: string }>(
+  for (const c of await all<{ id: string; name: string; slug: string; icon: string; color: string }>(
     "SELECT id, name, slug, icon, color FROM categories ORDER BY sort",
   )) {
     out.push({
@@ -174,7 +174,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  for (const t of all<{ id: string; name: string; slug: string; color: string }>(
+  for (const t of await all<{ id: string; name: string; slug: string; color: string }>(
     "SELECT id, name, slug, color FROM tags ORDER BY name",
   )) {
     out.push({
@@ -190,7 +190,7 @@ export function buildSearchIndex(): SearchEntry[] {
     });
   }
 
-  for (const n of all<{ id: string; title: string | null; body: string; slug: string | null }>(
+  for (const n of await all<{ id: string; title: string | null; body: string; slug: string | null }>(
     `SELECT n.id, n.title, n.body, p.slug FROM notes n LEFT JOIN projects p ON p.id = n.project_id
      ORDER BY n.updated_at DESC LIMIT 120`,
   )) {

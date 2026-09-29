@@ -112,14 +112,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   await ensureSeedUser();
   const user = await requireUser();
 
-  const projects = listProjects({ includeArchived: true });
+  const projects = await listProjects({ includeArchived: true });
   const visible = projects.filter((p) => !p.is_archived);
   const attention = attentionList(visible);
   const broken = visible.reduce((n, p) => n + p.brokenLinks, 0);
 
-  const index = buildSearchIndex();
+  const index = await buildSearchIndex();
 
-  const recentRows = all<{ slug: string }>(
+  const recentRows = await all<{ slug: string }>(
     "SELECT slug FROM projects WHERE last_opened_at IS NOT NULL AND is_archived = 0 ORDER BY last_opened_at DESC LIMIT 5",
   );
   const bySlug = new Map(index.filter((e) => e.kind === "project").map((e) => [e.href, e] as const));

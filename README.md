@@ -86,7 +86,7 @@ no cartão e na página do projeto.
 | Decisão | Por quê |
 |---|---|
 | Next.js 16 (App Router), React 19 | Server Components leem direto do banco; Server Actions fazem as escritas — nenhuma camada de API para manter |
-| `node:sqlite` (embutido no Node 24) | Banco de um arquivo, zero dependência nativa para compilar, transações síncronas. Para um operador só, é mais rápido e mais simples que Postgres |
+| Postgres (Neon) via `pg` | Roda em qualquer lugar, inclusive serverless. Substituiu o `node:sqlite` original: a Vercel não tem disco persistente, então um banco em arquivo perdia tudo a cada cold start |
 | Tailwind v4 + camada de tokens própria | Utilitários para layout, componentes nomeados (`.panel`, `.btn`, `.chip`, `.meter`) para identidade. Nada de biblioteca de UI pronta |
 | Sessão própria (scrypt + cookie httpOnly) | Sem dependência de provedor externo num sistema pessoal |
 
@@ -135,23 +135,28 @@ regenerar o módulo TypeScript.
 
 ## Deploy
 
-### Railway (recomendado — o SQLite precisa de disco)
+### Vercel (padrão)
 
-1. `railway init` e conecte o repositório.
-2. Crie um **Volume** montado em `/data`.
-3. Variáveis: `NEXUS_SECRET` (obrigatória), `NEXUS_DB_PATH=/data/nexus.db`,
-   `NEXUS_EMAIL`, `NEXUS_PASSWORD`, `NEXUS_OWNER_NAME`.
-4. Deploy — o `railway.json` já aponta para o `Dockerfile` e para o healthcheck.
+1. `vercel link` para conectar o repositório ao projeto.
+2. `vercel integration add neon` — provisiona o Postgres e injeta `DATABASE_URL`
+   e companhia no projeto automaticamente.
+3. Variáveis restantes: `NEXUS_SECRET` (obrigatória), `NEXUS_EMAIL`,
+   `NEXUS_PASSWORD`, `NEXUS_OWNER_NAME`.
+4. Push na `main` — o `vercel.json` fixa o preset `nextjs`.
 
-### Vercel
+O schema é criado na primeira conexão, protegido por um advisory lock do
+Postgres para que dois cold starts simultâneos não colidam no `CREATE TABLE`.
 
-Funciona, mas o sistema de arquivos é efêmero: o banco seria recriado a cada
-deploy. Só faz sentido com um Postgres gerenciado no lugar do SQLite — troca
-localizada em `src/lib/db.ts`, já que todo o resto fala SQL puro.
+### Railway (alternativa)
+
+O `Dockerfile` e o `railway.json` continuam válidos. Basta apontar `DATABASE_URL`
+para o mesmo Postgres — não é mais preciso volume, já que não existe arquivo de
+banco. Atenção ao bind: o proxy do Railway alcança o container por IPv6, por isso
+o `start` usa `-H ${HOST:-::}`.
 
 ### Backup
 
-O banco inteiro é `data/nexus.db`. Copiar o arquivo é o backup completo.
+Snapshot e restauração ficam do lado do Neon (branches e *instant restore*).
 Pela interface, **Configurações › Dados › Exportar tudo em JSON**.
 
 ## Scripts

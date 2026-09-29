@@ -22,7 +22,7 @@ export default async function FocoPage() {
   await requireUser();
   const now = Date.now();
 
-  const projects = listProjects().filter((p) => !p.is_archived);
+  const projects = (await listProjects()).filter((p) => !p.is_archived);
   const attention = attentionList(projects, now);
   const agendaItems = agenda(projects, now);
   const overdue = agendaItems.filter((i) => i.bucket === "overdue");

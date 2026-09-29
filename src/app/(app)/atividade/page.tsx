@@ -19,8 +19,8 @@ export default async function AtividadePage({
   await requireUser();
   const { p } = await searchParams;
   const page = Math.max(1, Number(p) || 1);
-  const total = countActivity();
-  const entries = listActivity(PAGE, (page - 1) * PAGE);
+  const total = await countActivity();
+  const entries = await listActivity(PAGE, (page - 1) * PAGE);
   const pages = Math.max(1, Math.ceil(total / PAGE));
 
   return (

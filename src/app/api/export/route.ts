@@ -36,7 +36,7 @@ export async function GET() {
       note: "Credenciais reais nunca são armazenadas — apenas referências de onde encontrá-las.",
     },
   };
-  for (const table of TABLES) payload[table] = all(`SELECT * FROM ${table}`);
+  for (const table of TABLES) payload[table] = await all(`SELECT * FROM ${table}`);
 
   const stamp = new Date().toISOString().slice(0, 10);
   return new NextResponse(JSON.stringify(payload, null, 2), {

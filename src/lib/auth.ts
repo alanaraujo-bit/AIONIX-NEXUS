@@ -6,7 +6,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-import { all, db, get, run, setSetting, setting } from "./db";
+import { all, get, ready, run, setSetting, setting } from "./db";
 import type { User } from "./types";
 
 const scrypt = promisify(scryptCb) as (
@@ -57,8 +57,8 @@ interface UserRow extends User {
   password_hash: string;
 }
 
-export function userCount(): number {
-  return (get<{ n: number }>("SELECT COUNT(*) AS n FROM users")?.n ?? 0) as number;
+export async function userCount(): Promise<number> {
+  return (await get<{ n: number }>("SELECT COUNT(*) AS n FROM users"))?.n ?? 0;
 }
 
 /**
@@ -66,7 +66,7 @@ export function userCount(): number {
  * inicializacao; se nao houver variaveis, o /login mostra o passo de setup.
  */
 export async function ensureSeedUser(): Promise<void> {
-  if (userCount() > 0) return;
+  if ((await userCount()) > 0) return;
   const email = process.env.NEXUS_EMAIL?.trim().toLowerCase();
   const password = process.env.NEXUS_PASSWORD;
   if (!email || !password || password.length < 8) return;
@@ -75,7 +75,7 @@ export async function ensureSeedUser(): Promise<void> {
 
 export async function createUser(email: string, password: string, name: string): Promise<string> {
   const id = randomUUID();
-  run("INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)", [
+  await run("INSERT INTO users (id, email, name, password_hash) VALUES (?, ?, ?, ?)", [
     id,
     email.trim().toLowerCase(),
     name,
@@ -84,12 +84,12 @@ export async function createUser(email: string, password: string, name: string):
   return id;
 }
 
-export function findUserByEmail(email: string): UserRow | undefined {
+export async function findUserByEmail(email: string): Promise<UserRow | undefined> {
   return get<UserRow>("SELECT * FROM users WHERE email = ?", [email.trim().toLowerCase()]);
 }
 
 export async function changePassword(userId: string, password: string) {
-  run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [
+  await run("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?", [
     await hashPassword(password),
     userId,
   ]);
@@ -102,8 +102,8 @@ export async function changePassword(userId: string, password: string) {
 const MAX_ATTEMPTS = 8;
 const WINDOW_MINUTES = 15;
 
-export function loginLocked(identifier: string): number {
-  const row = get<{ n: number }>(
+export async function loginLocked(identifier: string): Promise<number> {
+  const row = await get<{ n: number }>(
     `SELECT COUNT(*) AS n FROM login_attempts
      WHERE identifier = ? AND ok = 0 AND created_at > datetime('now', ?)`,
     [identifier, `-${WINDOW_MINUTES} minutes`],
@@ -112,10 +112,10 @@ export function loginLocked(identifier: string): number {
   return failures >= MAX_ATTEMPTS ? WINDOW_MINUTES : 0;
 }
 
-export function recordAttempt(identifier: string, ok: boolean) {
-  run("INSERT INTO login_attempts (identifier, ok) VALUES (?, ?)", [identifier, ok ? 1 : 0]);
-  if (ok) run("DELETE FROM login_attempts WHERE identifier = ?", [identifier]);
-  run("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')");
+export async function recordAttempt(identifier: string, ok: boolean) {
+  await run("INSERT INTO login_attempts (identifier, ok) VALUES (?, ?)", [identifier, ok ? 1 : 0]);
+  if (ok) await run("DELETE FROM login_attempts WHERE identifier = ?", [identifier]);
+  await run("DELETE FROM login_attempts WHERE created_at < datetime('now', '-1 day')");
 }
 
 // ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ export function recordAttempt(identifier: string, ok: boolean) {
  * app se recusa a emitir sessão, em vez de cair silenciosamente num padrão
  * fraco. Em desenvolvimento, gera e guarda um segredo local na primeira vez.
  */
-function sessionSecret(): string {
+async function sessionSecret(): Promise<string> {
   const fromEnv = process.env.NEXUS_SECRET?.trim();
   if (fromEnv && fromEnv.length >= 32) return fromEnv;
 
@@ -138,16 +138,17 @@ function sessionSecret(): string {
     );
   }
 
-  let local = setting("dev_session_secret", "");
+  let local = await setting("dev_session_secret", "");
   if (!local) {
     local = randomBytes(32).toString("base64url");
-    setSetting("dev_session_secret", local);
+    await setSetting("dev_session_secret", local);
   }
   return local;
 }
 
 /** Guardamos só o HMAC do token: nem o banco nem um backup revelam a sessão. */
-const signToken = (value: string) => createHmac("sha256", sessionSecret()).update(value).digest("hex");
+const signToken = async (value: string) =>
+  createHmac("sha256", await sessionSecret()).update(value).digest("hex");
 
 function secureCookies(): boolean {
   return process.env.NODE_ENV === "production" || process.env.NEXUS_FORCE_SECURE_COOKIES === "1";
@@ -159,14 +160,14 @@ export async function startSession(userId: string): Promise<void> {
   const ua = (await headers()).get("user-agent")?.slice(0, 250) ?? null;
   const expires = new Date(Date.now() + SESSION_DAYS * 86_400_000);
 
-  run("INSERT INTO sessions (id, user_id, token_hash, user_agent, expires_at) VALUES (?, ?, ?, ?, ?)", [
+  await run("INSERT INTO sessions (id, user_id, token_hash, user_agent, expires_at) VALUES (?, ?, ?, ?, ?)", [
     id,
     userId,
-    signToken(token),
+    await signToken(token),
     ua,
     expires.toISOString(),
   ]);
-  run("DELETE FROM sessions WHERE expires_at < datetime('now')");
+  await run("DELETE FROM sessions WHERE expires_at < datetime('now')");
 
   (await cookies()).set(SESSION_COOKIE, `${id}.${token}`, {
     httpOnly: true,
@@ -182,19 +183,19 @@ export async function endSession(): Promise<void> {
   const raw = jar.get(SESSION_COOKIE)?.value;
   if (raw) {
     const [id] = raw.split(".");
-    if (id) run("DELETE FROM sessions WHERE id = ?", [id]);
+    if (id) await run("DELETE FROM sessions WHERE id = ?", [id]);
   }
   jar.delete(SESSION_COOKIE);
 }
 
 export async function endAllSessions(userId: string): Promise<void> {
-  run("DELETE FROM sessions WHERE user_id = ?", [userId]);
+  await run("DELETE FROM sessions WHERE user_id = ?", [userId]);
   (await cookies()).delete(SESSION_COOKIE);
 }
 
 /** Usuario da requisicao atual, ou null. Memoizado por render. */
 export const currentUser = cache(async (): Promise<User | null> => {
-  db(); // garante schema carregado
+  await ready(); // garante schema carregado
   const raw = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!raw) return null;
   const sep = raw.indexOf(".");
@@ -202,21 +203,21 @@ export const currentUser = cache(async (): Promise<User | null> => {
   const id = raw.slice(0, sep);
   const token = raw.slice(sep + 1);
 
-  const row = get<{ token_hash: string; user_id: string; expires_at: string }>(
+  const row = await get<{ token_hash: string; user_id: string; expires_at: string }>(
     "SELECT token_hash, user_id, expires_at FROM sessions WHERE id = ?",
     [id],
   );
   if (!row) return null;
   if (new Date(row.expires_at).getTime() < Date.now()) {
-    run("DELETE FROM sessions WHERE id = ?", [id]);
+    await run("DELETE FROM sessions WHERE id = ?", [id]);
     return null;
   }
-  const a = Buffer.from(signToken(token));
+  const a = Buffer.from(await signToken(token));
   const b = Buffer.from(row.token_hash);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
 
-  run("UPDATE sessions SET last_seen_at = datetime('now') WHERE id = ?", [id]);
-  return get<User>("SELECT id, email, name, created_at FROM users WHERE id = ?", [row.user_id]) ?? null;
+  await run("UPDATE sessions SET last_seen_at = datetime('now') WHERE id = ?", [id]);
+  return (await get<User>("SELECT id, email, name, created_at FROM users WHERE id = ?", [row.user_id])) ?? null;
 });
 
 export async function requireUser(): Promise<User> {
@@ -236,8 +237,10 @@ export interface SessionInfo {
 
 export async function listSessions(userId: string): Promise<SessionInfo[]> {
   const currentId = (await cookies()).get(SESSION_COOKIE)?.value?.split(".")[0] ?? "";
-  return all<Omit<SessionInfo, "current">>(
-    "SELECT id, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC",
-    [userId],
+  return (
+    await all<Omit<SessionInfo, "current">>(
+      "SELECT id, user_agent, created_at, last_seen_at, expires_at FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC",
+      [userId],
+    )
   ).map((s) => ({ ...s, current: s.id === currentId }));
 }

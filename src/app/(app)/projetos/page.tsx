@@ -14,10 +14,10 @@ export const dynamic = "force-dynamic";
 export default async function ProjetosPage() {
   await requireUser();
 
-  const projects = listProjects({ includeArchived: true });
-  const categories = listCategories();
-  const clients = listClients(true);
-  const tags = listTags();
+  const projects = await listProjects({ includeArchived: true });
+  const categories = await listCategories();
+  const clients = await listClients(true);
+  const tags = await listTags();
   const active = projects.filter((p) => !p.is_archived).length;
   const archived = projects.length - active;
 

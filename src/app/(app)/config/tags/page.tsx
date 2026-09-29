@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function TagsPage() {
   await requireUser();
-  const usage = tagUsage();
-  const items: CatalogItem[] = listTags().map((t) => ({
+  const usage = await tagUsage();
+  const items: CatalogItem[] = (await listTags()).map((t) => ({
     id: t.id,
     name: t.name,
     slug: t.slug,

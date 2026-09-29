@@ -1,6 +1,34 @@
--- AIONIX NEXUS — esquema relacional (SQLite)
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
+-- AIONIX NEXUS — esquema relacional (PostgreSQL)
+--
+-- Portado do SQLite. Duas decisoes deliberadas mantem o resto do codigo intacto:
+--
+-- 1. Timestamps continuam TEXT no formato 'YYYY-MM-DD HH24:MI:SS' em UTC, igual
+--    ao que datetime('now') do SQLite produzia. Como o formato e ordenavel
+--    lexicograficamente, todas as comparacoes existentes seguem valendo.
+-- 2. A funcao datetime() abaixo reimplementa a do SQLite, entao as 41 chamadas
+--    espalhadas pelo codigo nao precisaram ser reescritas.
+--
+-- Booleanos continuam INTEGER 0/1, como no SQLite — o helper bool() em db.ts
+-- normaliza na leitura.
+
+CREATE OR REPLACE FUNCTION datetime(anchor text, modifier text DEFAULT NULL)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+AS $fn$
+DECLARE
+  base timestamp;
+BEGIN
+  IF anchor <> 'now' THEN
+    RAISE EXCEPTION 'datetime(): apenas o ancora ''now'' e suportado, recebido %', anchor;
+  END IF;
+  base := now() AT TIME ZONE 'utc';
+  IF modifier IS NOT NULL THEN
+    base := base + modifier::interval;
+  END IF;
+  RETURN to_char(base, 'YYYY-MM-DD HH24:MI:SS');
+END;
+$fn$;
 
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
@@ -23,7 +51,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
 CREATE TABLE IF NOT EXISTS login_attempts (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   identifier TEXT NOT NULL,
   ok         INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))

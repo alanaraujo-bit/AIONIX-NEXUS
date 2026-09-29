@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function LinksPage() {
   await requireUser();
   const now = Date.now();
-  const links = listAllLinks();
+  const links = await listAllLinks();
   const monitored = links.filter((l) => l.monitor);
   const checked = monitored.filter((l) => l.last_status !== null);
   const broken = checked.filter((l) => l.last_status === 0 || (l.last_status ?? 0) >= 400);

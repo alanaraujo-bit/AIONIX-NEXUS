@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const project = getProject(slug);
+  const project = await getProject(slug);
   return { title: project?.name ?? "Projeto" };
 }
 
@@ -29,10 +29,10 @@ const SEVERITY_COLOR = { 1: "var(--text-3)", 2: "var(--warn)", 3: "var(--bad)" }
 export default async function ProjetoPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireUser();
   const { slug } = await params;
-  const project = getProject(slug);
+  const project = await getProject(slug);
   if (!project) notFound();
 
-  markProjectOpened(project.id);
+  await markProjectOpened(project.id);
 
   const now = Date.now();
   const flags = attentionFlags(project, now);

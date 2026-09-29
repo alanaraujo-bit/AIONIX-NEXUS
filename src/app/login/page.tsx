@@ -11,7 +11,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { next } = await searchParams;
   await ensureSeedUser();
   if (await currentUser()) redirect("/");
-  const needsSetup = userCount() === 0;
+  const needsSetup = await userCount() === 0;
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-5 py-10">

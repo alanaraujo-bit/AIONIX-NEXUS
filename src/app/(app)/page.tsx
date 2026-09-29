@@ -35,12 +35,12 @@ export default async function CockpitPage() {
   const now = Date.now();
   const today = new Date();
 
-  const allProjects = listProjects({ includeArchived: true });
+  const allProjects = await listProjects({ includeArchived: true });
   const projects = allProjects.filter((p) => !p.is_archived);
   const archivedCount = allProjects.length - projects.length;
 
-  const clients = listClients();
-  const categories = listCategories();
+  const clients = await listClients();
+  const categories = await listCategories();
   const stats = portfolioStats(projects, {
     clients: clients.length,
     categories: categories.length,
@@ -54,9 +54,9 @@ export default async function CockpitPage() {
   const recentlyUpdated = [...projects]
     .sort((a, b) => (daysSince(a.last_activity_at, now) ?? 999) - (daysSince(b.last_activity_at, now) ?? 999))
     .slice(0, 6);
-  const activity = listActivity(9);
-  const favoriteTools = listTools().filter((t) => t.favorite).slice(0, 9);
-  const ownerName = setting("owner_name", user.name);
+  const activity = await listActivity(9);
+  const favoriteTools = (await listTools()).filter((t) => t.favorite).slice(0, 9);
+  const ownerName = await setting("owner_name", user.name);
 
   const dateLabel = new Intl.DateTimeFormat("pt-BR", {
     weekday: "long",

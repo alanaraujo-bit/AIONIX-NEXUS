@@ -18,7 +18,7 @@ const SHORTCUTS: Array<[string, string]> = [
 
 export default async function ConfigGeralPage() {
   const user = await requireUser();
-  const settings = allSettings();
+  const settings = await allSettings();
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">

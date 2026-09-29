@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function NovoProjetoPage() {
   await requireUser();
-  const tech = all<{ name: string }>(
+  const tech = (await all<{ name: string }>(
     "SELECT name, COUNT(*) AS n FROM project_tech GROUP BY name ORDER BY n DESC LIMIT 24",
-  ).map((r) => r.name);
+  )).map((r) => r.name);
+  const [categories, clients, tags] = await Promise.all([listCategories(), listClients(), listTags()]);
 
   return (
     <div>
@@ -21,9 +22,9 @@ export default async function NovoProjetoPage() {
         description="Só o nome é obrigatório. Links, ambientes e próximos passos você adiciona depois, na página do projeto."
       />
       <ProjectForm
-        categories={listCategories()}
-        clients={listClients()}
-        tagSuggestions={listTags().map((t) => t.name)}
+        categories={categories}
+        clients={clients}
+        tagSuggestions={tags.map((t) => t.name)}
         techSuggestions={tech}
       />
     </div>

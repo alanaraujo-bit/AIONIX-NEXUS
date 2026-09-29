@@ -123,35 +123,35 @@ const mapActivity = (r: Row): ActivityEntry => ({
 // Catálogos
 // ---------------------------------------------------------------------------
 
-export function listCategories(): Category[] {
-  return all("SELECT * FROM categories ORDER BY sort, name").map(mapCategory);
+export async function listCategories(): Promise<Category[]> {
+  return (await all<Row>("SELECT * FROM categories ORDER BY sort, name")).map(mapCategory);
 }
 
-export function listClients(includeArchived = false): Client[] {
+export async function listClients(includeArchived = false): Promise<Client[]> {
   const sql = includeArchived
     ? "SELECT * FROM clients ORDER BY archived, sort, name"
     : "SELECT * FROM clients WHERE archived = 0 ORDER BY sort, name";
-  return all<Row>(sql).map(mapClient);
+  return (await all<Row>(sql)).map(mapClient);
 }
 
-export function getClientBySlug(slug: string): Client | null {
-  const row = get<Row>("SELECT * FROM clients WHERE slug = ?", [slug]);
+export async function getClientBySlug(slug: string): Promise<Client | null> {
+  const row = await get<Row>("SELECT * FROM clients WHERE slug = ?", [slug]);
   return row ? mapClient(row) : null;
 }
 
-export function listTags(): Tag[] {
-  return all("SELECT * FROM tags ORDER BY name").map(mapTag);
+export async function listTags(): Promise<Tag[]> {
+  return (await all<Row>("SELECT * FROM tags ORDER BY name")).map(mapTag);
 }
 
-export function tagUsage(): Record<string, number> {
-  const rows = all<{ tag_id: string; n: number }>(
+export async function tagUsage(): Promise<Record<string, number>> {
+  const rows = await all<{ tag_id: string; n: number }>(
     "SELECT tag_id, COUNT(*) AS n FROM project_tags GROUP BY tag_id",
   );
   return Object.fromEntries(rows.map((r) => [r.tag_id, r.n]));
 }
 
-export function listToolGroups(): ToolGroup[] {
-  return all<Row>("SELECT * FROM tool_groups ORDER BY sort, name").map((r) => ({
+export async function listToolGroups(): Promise<ToolGroup[]> {
+  return (await all<Row>("SELECT * FROM tool_groups ORDER BY sort, name")).map((r) => ({
     id: String(r.id),
     name: String(r.name),
     icon: String(r.icon ?? "Grid2x2"),
@@ -159,8 +159,8 @@ export function listToolGroups(): ToolGroup[] {
   }));
 }
 
-export function listTools(): Tool[] {
-  return all<Row>("SELECT * FROM tools ORDER BY sort, name").map(mapTool);
+export async function listTools(): Promise<Tool[]> {
+  return (await all<Row>("SELECT * FROM tools ORDER BY sort, name")).map(mapTool);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +188,7 @@ interface Aggregates {
   nextStep: Map<string, { id: string; title: string; due_at: string | null }>;
 }
 
-function aggregatesFor(ids: string[]): Aggregates {
+async function aggregatesFor(ids: string[]): Promise<Aggregates> {
   const empty: Aggregates = {
     tags: new Map(),
     tech: new Map(),
@@ -201,7 +201,7 @@ function aggregatesFor(ids: string[]): Aggregates {
   if (ids.length === 0) return empty;
   const ph = ids.map(() => "?").join(",");
 
-  for (const r of all<Row>(
+  for (const r of await all<Row>(
     `SELECT pt.project_id, t.* FROM project_tags pt
      JOIN tags t ON t.id = pt.tag_id
      WHERE pt.project_id IN (${ph}) ORDER BY t.name`,
@@ -213,7 +213,7 @@ function aggregatesFor(ids: string[]): Aggregates {
     empty.tags.set(key, list);
   }
 
-  for (const r of all<{ project_id: string; name: string }>(
+  for (const r of await all<{ project_id: string; name: string }>(
     `SELECT project_id, name FROM project_tech WHERE project_id IN (${ph}) ORDER BY sort, name`,
     ids,
   )) {
@@ -222,7 +222,7 @@ function aggregatesFor(ids: string[]): Aggregates {
     empty.tech.set(r.project_id, list);
   }
 
-  for (const r of all<{ project_id: string; n: number; broken: number }>(
+  for (const r of await all<{ project_id: string; n: number; broken: number }>(
     `SELECT project_id, COUNT(*) AS n,
             SUM(CASE WHEN last_status IS NOT NULL AND (last_status = 0 OR last_status >= 400) THEN 1 ELSE 0 END) AS broken
      FROM project_links WHERE project_id IN (${ph}) GROUP BY project_id`,
@@ -232,7 +232,7 @@ function aggregatesFor(ids: string[]): Aggregates {
     empty.broken.set(r.project_id, r.broken ?? 0);
   }
 
-  for (const r of all<{ project_id: string; url: string }>(
+  for (const r of await all<{ project_id: string; url: string }>(
     `SELECT project_id, url FROM project_links
      WHERE project_id IN (${ph})
      ORDER BY is_primary DESC, CASE kind WHEN 'production' THEN 0 WHEN 'staging' THEN 1 WHEN 'admin' THEN 2 ELSE 3 END, sort`,
@@ -241,7 +241,7 @@ function aggregatesFor(ids: string[]): Aggregates {
     if (!empty.primary.has(r.project_id)) empty.primary.set(r.project_id, r.url);
   }
 
-  for (const r of all<{ project_id: string; id: string; title: string; due_at: string | null; n: number }>(
+  for (const r of await all<{ project_id: string; id: string; title: string; due_at: string | null; n: number }>(
     `SELECT project_id, COUNT(*) AS n FROM project_steps
      WHERE project_id IN (${ph}) AND done = 0 GROUP BY project_id`,
     ids,
@@ -249,7 +249,7 @@ function aggregatesFor(ids: string[]): Aggregates {
     empty.openSteps.set(r.project_id, r.n);
   }
 
-  for (const r of all<{ project_id: string; id: string; title: string; due_at: string | null }>(
+  for (const r of await all<{ project_id: string; id: string; title: string; due_at: string | null }>(
     `SELECT project_id, id, title, due_at FROM project_steps
      WHERE project_id IN (${ph}) AND done = 0
      ORDER BY (due_at IS NULL), due_at, sort, created_at`,
@@ -322,32 +322,35 @@ function mapProject(r: Row, agg: Aggregates): Project {
   };
 }
 
-function hydrate(rows: Row[]): Project[] {
-  const agg = aggregatesFor(rows.map((r) => String(r.id)));
+async function hydrate(rows: Row[]): Promise<Project[]> {
+  const agg = await aggregatesFor(rows.map((r) => String(r.id)));
   return rows.map((r) => mapProject(r, agg));
 }
 
-export function listProjects(opts: { includeArchived?: boolean } = {}): Project[] {
+export async function listProjects(opts: { includeArchived?: boolean } = {}): Promise<Project[]> {
   const where = opts.includeArchived ? "" : "WHERE p.is_archived = 0";
-  return hydrate(all<Row>(`${PROJECT_SELECT} ${where} ORDER BY p.is_pinned DESC, p.sort, p.name`));
+  return hydrate(await all<Row>(`${PROJECT_SELECT} ${where} ORDER BY p.is_pinned DESC, p.sort, p.name`));
 }
 
-export function getProject(slug: string): ProjectDetail | null {
-  const row = get<Row>(`${PROJECT_SELECT} WHERE p.slug = ?`, [slug]);
+export async function getProject(slug: string): Promise<ProjectDetail | null> {
+  const row = await get<Row>(`${PROJECT_SELECT} WHERE p.slug = ?`, [slug]);
   if (!row) return null;
-  const base = hydrate([row])[0];
+  const base = (await hydrate([row]))[0];
   const id = base.id;
   return {
     ...base,
-    links: all<Row>(
-      "SELECT * FROM project_links WHERE project_id = ? ORDER BY is_primary DESC, sort, label",
-      [id],
+    links: (
+      await all<Row>("SELECT * FROM project_links WHERE project_id = ? ORDER BY is_primary DESC, sort, label", [id])
     ).map(mapLink),
-    steps: all<Row>(
-      "SELECT * FROM project_steps WHERE project_id = ? ORDER BY done, (due_at IS NULL), due_at, sort, created_at",
-      [id],
+    steps: (
+      await all<Row>(
+        "SELECT * FROM project_steps WHERE project_id = ? ORDER BY done, (due_at IS NULL), due_at, sort, created_at",
+        [id],
+      )
     ).map(mapStep),
-    credentials: all<Row>("SELECT * FROM project_credentials WHERE project_id = ? ORDER BY sort, label", [id]).map(
+    credentials: (
+      await all<Row>("SELECT * FROM project_credentials WHERE project_id = ? ORDER BY sort, label", [id])
+    ).map(
       (r): ProjectCredential => ({
         id: String(r.id),
         project_id: String(r.project_id),
@@ -360,7 +363,7 @@ export function getProject(slug: string): ProjectDetail | null {
         sort: int(r.sort),
       }),
     ),
-    assets: all<Row>("SELECT * FROM project_assets WHERE project_id = ? ORDER BY sort, label", [id]).map(
+    assets: (await all<Row>("SELECT * FROM project_assets WHERE project_id = ? ORDER BY sort, label", [id])).map(
       (r): ProjectAsset => ({
         id: String(r.id),
         project_id: String(r.project_id),
@@ -371,13 +374,12 @@ export function getProject(slug: string): ProjectDetail | null {
         sort: int(r.sort),
       }),
     ),
-    projectNotes: all<Row>(
-      "SELECT * FROM notes WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC",
-      [id],
+    projectNotes: (
+      await all<Row>("SELECT * FROM notes WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC", [id])
     ).map(mapNote),
-    activity: all<Row>("SELECT * FROM activity WHERE project_id = ? ORDER BY created_at DESC LIMIT 40", [id]).map(
-      mapActivity,
-    ),
+    activity: (
+      await all<Row>("SELECT * FROM activity WHERE project_id = ? ORDER BY created_at DESC LIMIT 40", [id])
+    ).map(mapActivity),
   };
 }
 
@@ -385,12 +387,16 @@ export function getProject(slug: string): ProjectDetail | null {
 // Notas soltas, atividade, links globais
 // ---------------------------------------------------------------------------
 
-export function listAllNotes(limit = 200): Array<Note & { projectName: string | null; projectSlug: string | null }> {
-  return all<Row>(
-    `SELECT n.*, p.name AS project_name, p.slug AS project_slug
+export async function listAllNotes(
+  limit = 200,
+): Promise<Array<Note & { projectName: string | null; projectSlug: string | null }>> {
+  return (
+    await all<Row>(
+      `SELECT n.*, p.name AS project_name, p.slug AS project_slug
      FROM notes n LEFT JOIN projects p ON p.id = n.project_id
      ORDER BY n.pinned DESC, n.updated_at DESC LIMIT ?`,
-    [limit],
+      [limit],
+    )
   ).map((r) => ({
     ...mapNote(r),
     projectName: (r.project_name as string) ?? null,
@@ -405,12 +411,16 @@ export interface ActivityWithProject extends ActivityEntry {
   projectColor: string | null;
 }
 
-export function listActivity(limit = 40, offset = 0): ActivityWithProject[] {
-  return all<Row>(
-    `SELECT a.*, p.name AS project_name, p.slug AS project_slug, p.icon AS project_icon, p.color AS project_color
+export async function listActivity(limit = 40, offset = 0): Promise<ActivityWithProject[]> {
+  // Desempate por id: o `rowid` do SQLite nao existe no Postgres. Nao reproduz
+  // a ordem de insercao, mas mantem a paginacao estavel entre requisicoes.
+  return (
+    await all<Row>(
+      `SELECT a.*, p.name AS project_name, p.slug AS project_slug, p.icon AS project_icon, p.color AS project_color
      FROM activity a LEFT JOIN projects p ON p.id = a.project_id
-     ORDER BY a.created_at DESC, a.rowid DESC LIMIT ? OFFSET ?`,
-    [limit, offset],
+     ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?`,
+      [limit, offset],
+    )
   ).map((r) => ({
     ...mapActivity(r),
     projectName: (r.project_name as string) ?? null,
@@ -420,8 +430,8 @@ export function listActivity(limit = 40, offset = 0): ActivityWithProject[] {
   }));
 }
 
-export function countActivity(): number {
-  return get<{ n: number }>("SELECT COUNT(*) AS n FROM activity")?.n ?? 0;
+export async function countActivity(): Promise<number> {
+  return (await get<{ n: number }>("SELECT COUNT(*) AS n FROM activity"))?.n ?? 0;
 }
 
 export interface LinkWithProject extends ProjectLink {
@@ -431,12 +441,14 @@ export interface LinkWithProject extends ProjectLink {
   projectColor: string;
 }
 
-export function listAllLinks(onlyMonitored = false): LinkWithProject[] {
+export async function listAllLinks(onlyMonitored = false): Promise<LinkWithProject[]> {
   const where = onlyMonitored ? "WHERE l.monitor = 1" : "";
-  return all<Row>(
-    `SELECT l.*, p.name AS project_name, p.slug AS project_slug, p.icon AS project_icon, p.color AS project_color
+  return (
+    await all<Row>(
+      `SELECT l.*, p.name AS project_name, p.slug AS project_slug, p.icon AS project_icon, p.color AS project_color
      FROM project_links l JOIN projects p ON p.id = l.project_id
      ${where} ORDER BY p.name, l.sort`,
+    )
   ).map((r) => ({
     ...mapLink(r),
     projectName: String(r.project_name),
@@ -446,7 +458,7 @@ export function listAllLinks(onlyMonitored = false): LinkWithProject[] {
   }));
 }
 
-export function logActivity(entry: {
+export async function logActivity(entry: {
   projectId?: string | null;
   entity?: string;
   entityId?: string | null;
@@ -454,7 +466,7 @@ export function logActivity(entry: {
   title: string;
   detail?: string | null;
 }) {
-  run(
+  await run(
     "INSERT INTO activity (id, project_id, entity, entity_id, action, title, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [
       crypto.randomUUID(),
@@ -466,16 +478,18 @@ export function logActivity(entry: {
       entry.detail ?? null,
     ],
   );
-  run("DELETE FROM activity WHERE id IN (SELECT id FROM activity ORDER BY created_at DESC LIMIT -1 OFFSET 2000)");
+  // Mantem as 2000 entradas mais recentes. O SQLite pedia `LIMIT -1 OFFSET n`
+  // para "tudo a partir de n"; no Postgres o OFFSET sozinho ja faz isso.
+  await run("DELETE FROM activity WHERE id IN (SELECT id FROM activity ORDER BY created_at DESC OFFSET 2000)");
 }
 
 /** Marca visita — alimenta "abertos recentemente" no Command Center. */
-export function markProjectOpened(projectId: string) {
-  run("UPDATE projects SET last_opened_at = datetime('now') WHERE id = ?", [projectId]);
+export async function markProjectOpened(projectId: string) {
+  await run("UPDATE projects SET last_opened_at = datetime('now') WHERE id = ?", [projectId]);
 }
 
-export function touchProject(projectId: string, activity = true) {
-  run(
+export async function touchProject(projectId: string, activity = true) {
+  await run(
     `UPDATE projects SET updated_at = datetime('now')${activity ? ", last_activity_at = datetime('now')" : ""} WHERE id = ?`,
     [projectId],
   );

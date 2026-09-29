@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function NotasPage() {
   await requireUser();
-  const notes = listAllNotes();
-  const projects = listProjects({ includeArchived: true }).map((p) => ({ id: p.id, name: p.name }));
+  const notes = await listAllNotes();
+  const projects = (await listProjects({ includeArchived: true })).map((p) => ({ id: p.id, name: p.name }));
 
   return (
     <div>

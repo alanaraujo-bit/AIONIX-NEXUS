@@ -11,8 +11,10 @@
     "db:seed": "node --experimental-strip-types scripts/seed.mjs"
   },
   "dependencies": {
+    "@vercel/functions": "^3.9.9",
     "lucide-react": "^1.48.0",
     "next": "^16.3.6",
+    "pg": "^8.23.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "server-only": "^0.0.1",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.9",
     "@types/node": "^22.13.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "tailwindcss": "^4.0.9",

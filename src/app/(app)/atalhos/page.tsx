@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AtalhosPage() {
   await requireUser();
-  const groups = listToolGroups();
-  const tools = listTools();
+  const groups = await listToolGroups();
+  const tools = await listTools();
 
   return (
     <div>

@@ -8,8 +8,8 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientesPage() {
   await requireUser();
-  const projects = listProjects({ includeArchived: true });
-  const clients: ClientWithStats[] = listClients(true).map((c) => {
+  const projects = await listProjects({ includeArchived: true });
+  const clients: ClientWithStats[] = (await listClients(true)).map((c) => {
     const mine = projects.filter((p) => p.client_id === c.id);
     return {
       ...c,

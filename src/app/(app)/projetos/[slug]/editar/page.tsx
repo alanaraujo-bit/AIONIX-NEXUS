@@ -10,19 +10,20 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const project = getProject(slug);
+  const project = await getProject(slug);
   return { title: project ? `Editar ${project.name}` : "Editar projeto" };
 }
 
 export default async function EditarProjetoPage({ params }: { params: Promise<{ slug: string }> }) {
   await requireUser();
   const { slug } = await params;
-  const project = getProject(slug);
+  const project = await getProject(slug);
   if (!project) notFound();
 
-  const tech = all<{ name: string }>(
+  const tech = (await all<{ name: string }>(
     "SELECT name, COUNT(*) AS n FROM project_tech GROUP BY name ORDER BY n DESC LIMIT 24",
-  ).map((r) => r.name);
+  )).map((r) => r.name);
+  const [categories, clients, tags] = await Promise.all([listCategories(), listClients(true), listTags()]);
 
   return (
     <div>
@@ -36,9 +37,9 @@ export default async function EditarProjetoPage({ params }: { params: Promise<{ 
       />
       <ProjectForm
         project={project}
-        categories={listCategories()}
-        clients={listClients(true)}
-        tagSuggestions={listTags().map((t) => t.name)}
+        categories={categories}
+        clients={clients}
+        tagSuggestions={tags.map((t) => t.name)}
         techSuggestions={tech}
       />
     </div>

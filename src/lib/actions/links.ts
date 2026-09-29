@@ -76,7 +76,7 @@ async function checkRows(rows: CheckRow[]) {
     while (cursor < rows.length) {
       const row = rows[cursor++];
       const { status, error } = await probe(row.url);
-      run("UPDATE project_links SET last_status = ?, last_error = ?, last_checked_at = datetime('now') WHERE id = ?", [
+      await run("UPDATE project_links SET last_status = ?, last_error = ?, last_checked_at = datetime('now') WHERE id = ?", [
         status,
         error,
         row.id,
@@ -94,12 +94,12 @@ export async function checkProjectLinksAction(formData: FormData) {
   const projectId = String(formData.get("project_id") ?? "");
   if (!projectId) return;
 
-  const rows = all<CheckRow>(
+  const rows = await all<CheckRow>(
     "SELECT id, url, project_id, label FROM project_links WHERE project_id = ? AND monitor = 1",
     [projectId],
   );
   const broken = await checkRows(rows);
-  logActivity({
+  await logActivity({
     projectId,
     action: "check",
     title: `teve ${rows.length} link${rows.length === 1 ? "" : "s"} verificado${rows.length === 1 ? "" : "s"}`,
@@ -110,13 +110,13 @@ export async function checkProjectLinksAction(formData: FormData) {
 
 export async function checkAllLinksAction() {
   await requireUser();
-  const rows = all<CheckRow>(
+  const rows = await all<CheckRow>(
     `SELECT l.id, l.url, l.project_id, l.label FROM project_links l
      JOIN projects p ON p.id = l.project_id
      WHERE l.monitor = 1 AND p.is_archived = 0`,
   );
   const broken = await checkRows(rows);
-  logActivity({
+  await logActivity({
     entity: "system",
     action: "check",
     title: `Verificação geral: ${rows.length} links`,
@@ -128,7 +128,7 @@ export async function checkAllLinksAction() {
 export async function checkSingleLinkAction(formData: FormData) {
   await requireUser();
   const id = String(formData.get("id") ?? "");
-  const rows = all<CheckRow>("SELECT id, url, project_id, label FROM project_links WHERE id = ?", [id]);
+  const rows = await all<CheckRow>("SELECT id, url, project_id, label FROM project_links WHERE id = ?", [id]);
   await checkRows(rows);
   revalidatePath("/", "layout");
 }

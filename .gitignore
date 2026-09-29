@@ -15,3 +15,8 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# Skills de agente instaladas pelo `vercel integration add` (regeneraveis
+# a partir do skills-lock.json)
+.agents/
+.claude/

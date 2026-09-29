@@ -28,12 +28,14 @@ const TABLES: Array<[string, string]> = [
 export default async function DadosPage() {
   await requireUser();
 
-  const counts = TABLES.map(([table, label]) => ({
-    label,
-    n: get<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`)?.n ?? 0,
-  }));
+  const counts = await Promise.all(
+    TABLES.map(async ([table, label]) => ({
+      label,
+      n: (await get<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table}`))?.n ?? 0,
+    })),
+  );
 
-  const demo = demoIsLoaded({ get, run, uid });
+  const demo = await demoIsLoaded({ get, run, uid });
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">

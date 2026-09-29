@@ -15,18 +15,18 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const client = getClientBySlug(slug);
+  const client = await getClientBySlug(slug);
   return { title: client?.name ?? "Cliente" };
 }
 
 export default async function ClientePage({ params }: { params: Promise<{ slug: string }> }) {
   await requireUser();
   const { slug } = await params;
-  const client = getClientBySlug(slug);
+  const client = await getClientBySlug(slug);
   if (!client) notFound();
 
   const now = Date.now();
-  const projects = listProjects({ includeArchived: true }).filter((p) => p.client_id === client.id);
+  const projects = (await listProjects({ includeArchived: true })).filter((p) => p.client_id === client.id);
   const byStatus = projects.reduce<Record<string, number>>((acc, p) => {
     acc[p.status] = (acc[p.status] ?? 0) + 1;
     return acc;
